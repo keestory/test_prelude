@@ -41,6 +41,7 @@ test('the app gates operational data behind Supabase Auth and never resurrects r
   assert.match(html, /id="mb-cloud-gate"/);
   assert.match(html, /id="mb-cloud-login-form" hidden/);
   assert.match(html, /id="mb-cloud-login-help" hidden/);
+  assert.match(html, /\.mb-cloud-form\[hidden\],\s*#munbang-inventory #mb-cloud-login-help\[hidden\] \{ display: none; \}/);
   assert.match(html, /id="mb-cloud-title">&lt; PRELUDE 준비 중/);
   assert.match(html, /id="mb-cloud-password"/);
   assert.match(html, /id="mb-cloud-login" type="button"/);
