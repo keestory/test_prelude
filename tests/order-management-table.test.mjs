@@ -28,25 +28,27 @@ test('발주 관리 표는 요청한 9개 컬럼을 요청 순서대로 표시�
   assert.doesNotMatch(html, /문서 버전<\/th>/);
 });
 
-test('목록 상태는 내부 발주 단계를 3개의 사용자 상태로 합친다', () => {
+test('목록 상태는 발주 준비와 실제 발주 완료를 구분한다', () => {
   const start = html.indexOf('function orderStatusGroup');
   const end = html.indexOf('function orderLineQty', start);
   const source = html.slice(start, end);
   const helpers = new Function(`${source}; return { orderStatusGroup, orderStatusLabel };`)();
 
-  assert.equal(helpers.orderStatusGroup('ORDERED'), 'ORDER_COMPLETE');
+  assert.equal(helpers.orderStatusGroup('ORDERED'), 'ORDER_PREPARING');
   assert.equal(helpers.orderStatusGroup('CONFIRMED'), 'ORDER_COMPLETE');
-  assert.equal(helpers.orderStatusLabel('ORDERED'), '발주 완료');
+  assert.equal(helpers.orderStatusLabel('ORDERED'), '발주 준비');
   assert.equal(helpers.orderStatusLabel('CONFIRMED'), '발주 완료');
   assert.equal(helpers.orderStatusLabel('RECEIVED'), '입고 완료');
   assert.equal(helpers.orderStatusLabel('CANCELLED'), '발주 취소');
-  assert.match(html, /<option value="ORDER_COMPLETE">발주 완료<\/option><option value="RECEIVED">입고 완료<\/option><option value="CANCELLED">발주 취소<\/option>/);
+  assert.match(html, /<option value="ORDER_PREPARING">발주 준비<\/option><option value="ORDER_COMPLETE">발주 완료<\/option><option value="RECEIVED">입고 완료<\/option><option value="CANCELLED">발주 취소<\/option>/);
 });
 
-test('기타 컬럼은 상태별로 입고 완료와 발주 취소만 노출한다', () => {
+test('기타 컬럼은 발주 준비에서 완료, 완료 후 입고 액션을 노출한다', () => {
   const start = html.indexOf('function renderOrders');
   const end = html.indexOf('function renderSuppliers', start);
   const source = html.slice(start, end);
+  assert.match(source, /order\.status==='ORDERED'.*data-order-confirm=.*발주 완료/);
+  assert.match(source, /order\.status==='CONFIRMED'.*data-order-receive=.*입고 완료/);
   assert.match(source, /data-order-receive=.*입고 완료/);
   assert.match(source, /data-order-cancel=.*발주 취소/);
   assert.match(source, /order\.status==='RECEIVED'.*data-order-cancel/);
