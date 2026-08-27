@@ -198,6 +198,14 @@ function findHeaderColumn(headers, candidates) {
   return index < 0 ? null : index + 1;
 }
 
+function identifierFieldForHeader(header) {
+  const normalized = normalizeHeader(header);
+  if (['바코드', 'barcode', 'ean13', 'gtin'].includes(normalized)) return 'barcode';
+  if (normalized.includes('프렐류드') || normalized.includes('prelude')) return 'productId';
+  if (normalized === 'sku' || normalized === '옵션sku') return 'sku';
+  return 'supplierCode';
+}
+
 export function analyzeSheetHtml(html, tab) {
   const rows = parseSheetRows(html, tab.sheetId);
   const headerRow = rows.find((row) => {
@@ -207,28 +215,30 @@ export function analyzeSheetHtml(html, tab) {
   });
   const headers = headerRow ? headerRow.cells : [];
   const keyColumn = findHeaderColumn(headers, ['상품번호', '상품코드', '품번', '바코드', 'SKU', '프렐류드 상품ID']);
+  const keyField = keyColumn ? identifierFieldForHeader(headers[keyColumn - 1]) : null;
   const qtyColumn = findHeaderColumn(headers, ['발주수', '발주수량', '주문수량', '수량']);
-  const productNameColumn = findHeaderColumn(headers, ['제품명', '상품명', '품명']);
+  const productNameColumn = findHeaderColumn(headers, ['제품명', '상품명', '상품명(KR)', '품명']);
   const imageColumn = findHeaderColumn(headers, ['제품이미지', '상품이미지', '이미지', 'product image', 'image']);
   const orderUnitColumn = findHeaderColumn(headers, ['주문단위', '입수', '포장단위']);
   const retailPriceColumn = findHeaderColumn(headers, ['소비자가', '정가', '판매가', 'RETAIL PRICE']);
   const amountColumn = findHeaderColumn(headers, ['금액', '금 액', '합계금액']);
   const dataRow = headerRow && rows.find((row) => row.row > headerRow.row && row.cells.slice(0, Math.max(headers.length, 10)).some((cell) => cell !== ''));
+  const valid = Boolean(headerRow && keyColumn && qtyColumn && keyColumn !== qtyColumn);
   const structureSignature = hash(JSON.stringify({
     headers: headers.map(normalizeHeader),
     headerRow: headerRow?.row || null,
     dataStartRow: dataRow?.row || null,
     keyColumn,
+    keyField,
     qtyColumn,
   }));
   const formatSignature = hash(rows.slice(0, 40).map((row) => row.source.replace(/>([^<]*)</g, '><').replace(/\s+/g, ' ')).join(''));
-  const valid = Boolean(headerRow && keyColumn && qtyColumn && keyColumn !== qtyColumn);
   return {
     ...tab,
     headerRow: headerRow?.row || null,
     dataStartRow: dataRow?.row || null,
     headers,
-    columns: { key: keyColumn, productName: productNameColumn, image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
+    columns: { key: keyColumn, keyField, productName: productNameColumn, image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
     structureSignature,
     formatSignature,
     status: valid ? 'CONFIRMED' : 'NEEDS_REVIEW',

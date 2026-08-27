@@ -52,7 +52,7 @@ function registeredSkuUnitCost(item) {
   )(() => null)(item);
 }
 
-function pricingPolicyHarness(contract, registeredCost = null) {
+function pricingPolicyHarness(contract, registeredCost = null, { activeVersion = true } = {}) {
   return new Function(
     'positiveTemplateInteger',
     'templateUnitCostMode',
@@ -63,7 +63,7 @@ function pricingPolicyHarness(contract, registeredCost = null) {
   )(
     (value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null,
     (value) => value?.unitCostMode || 'NONE',
-    () => ({ bindings: [] }),
+    () => activeVersion ? ({ bindings: [] }) : null,
     () => ({ contract }),
     () => Number(registeredCost) > 0 ? Number(registeredCost) : null,
   );
@@ -129,6 +129,21 @@ test('발주 가능 SKU 조회 표는 요청 컬럼 순서와 빈값 규칙을 �
   assert.match(builderSource, /colspan="8"/);
 });
 
+test('발주 후보의 추가 버튼은 정확한 offer를 발주 품목에 담는다', () => {
+  const clickStart = html.indexOf("var addOrderSku = event.target.closest('[data-order-add-sku]')");
+  const clickEnd = html.indexOf("var removeOrderSku", clickStart);
+  assert.ok(clickStart >= 0 && clickEnd > clickStart, 'add SKU click handler must exist');
+  const clickSource = html.slice(clickStart, clickEnd);
+  assert.match(clickSource, /if \(addOrderSku\)/);
+  assert.match(clickSource, /data-offer-id/);
+  assert.match(clickSource, /candidate\.id===addOfferId/);
+  assert.match(clickSource, /offerOrderReady\(addOffer\)/);
+  assert.match(clickSource, /draftLinePriceResolution\(addItem,addOffer,addSupplier\)/);
+  assert.match(clickSource, /qty:addUnits\*addOffer\.unitsPerOrder/);
+  assert.match(clickSource, /draftLines\.push\(addLine\);renderOrderBuilder\(\)/);
+  assert.match(clickSource, /addedQtyInput\.focus\(\)/);
+});
+
 test('저장과 Excel 출력은 발주 횟수와 총 EA를 모두 보존한다', () => {
   assert.match(html, /orderUnits:lineOrderUnits\(line,offer\)/);
   assert.match(html, /unitsPerOrderSnapshot:lineOrderUnitSize\(line,offer\)/);
@@ -168,6 +183,38 @@ test('매입가 없고 소비자가만 있는 양식은 소비자가 × 주문�
   assert.equal(helpers.lineAmount(line), 54_000);
   assert.equal(helpers.lineInventoryUnitCost(line), null);
   assert.match(html, /실제 매입가 및 정산·마진 분석용 원가가 아닙니다/);
+});
+
+test('양식 버전 로딩 전에도 RETAIL PRICE 원본 매핑으로 발주 적용 단가를 결정한다', () => {
+  const helpers = pricingPolicyHarness(null, null, { activeVersion: false });
+  const line = { qty: 1 };
+  const item = {
+    price: 10_500,
+    importColumnMapping: [
+      { sourceHeader: 'RETAIL PRICE', targetField: 'price' },
+      { sourceHeader: '총수량', targetField: 'ignore' },
+    ],
+  };
+  const offer = { priceType: 'QUOTE' };
+  const resolved = helpers.applyDraftLinePrice(line, item, offer, { id: 'SUP-MINDOBITTO' });
+
+  assert.equal(resolved.value, 10_500);
+  assert.equal(resolved.basis, 'RETAIL_PRICE_FALLBACK');
+  assert.equal(line.unitCost, 0);
+  assert.equal(helpers.lineAppliedUnitPrice(line), 10_500);
+  assert.equal(helpers.lineAmount(line), 10_500);
+});
+
+test('실제 매입가가 있으면 RETAIL PRICE 원본 매핑보다 우선한다', () => {
+  const helpers = pricingPolicyHarness(null, 6_000, { activeVersion: false });
+  const line = { qty: 2 };
+  const item = { price: 10_500, importColumnMapping: [{ sourceHeader: 'RETAIL PRICE', targetField: 'price' }] };
+  const offer = { priceType: 'QUOTE' };
+  const resolved = helpers.applyDraftLinePrice(line, item, offer, { id: 'SUP-MINDOBITTO' });
+
+  assert.equal(resolved.value, 6_000);
+  assert.equal(resolved.basis, 'PURCHASE_COST');
+  assert.equal(helpers.lineInventoryUnitCost(line), 6_000);
 });
 
 test('매입가와 소비자가가 모두 없으면 발주 단가를 확정하지 않는다', () => {
