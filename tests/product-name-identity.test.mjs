@@ -56,7 +56,7 @@ test('unique names match by name while same names use option, size, barcode, or 
     ['연필', '', '', '', '', 1000, ''],
   ]);
   const result = helpers.resolveTemplateNameIdentityRows(sheet, mapping, contract, [
-    { productName: '노트', option: '파랑', size: 'A6', barcode: '0002', templateCellsByColumn: { 5: 'ST-2' }, retailPrice: 999999, qty: 22 },
+    { productName: '노트', option: '파랑', barcode: '0002', templateCellsByColumn: { 3: 'A6', 5: 'ST-2' }, retailPrice: 999999, qty: 22 },
     { productName: '연필', retailPrice: 999999, qty: 33 },
   ]);
   assert.deepEqual(result.resolved.map((entry) => entry.targetRow), [3, 4]);

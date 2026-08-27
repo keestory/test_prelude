@@ -43,6 +43,9 @@ function schemaFor(sheetId, headers) {
     제품이미지: 'image',
     소비자가: 'retailPrice',
     'RETAIL PRICE': 'retailPrice',
+    'Cat.1': 'category1',
+    'Cat.2': 'category2',
+    'size (W x L x Hmm)': 'size',
     주문단위: 'orderUnit',
     발주수: 'qty',
     '금 액': 'amount',
@@ -105,4 +108,16 @@ test('고정 필드와 동적 customFields 저장 경계를 유지한다', () =>
   assert.match(html, /customFields\[field\.id\]=collected\.values\[field\.id\]/);
   assert.match(html, /sheetProfile:\s*sheetProfile/);
   assert.doesNotMatch(html, /Object\.assign\([^\n]*collected\.values/);
+});
+
+test('OIMU Cat.1 Cat.2 size 원본 열을 서로 다른 입력 필드로 보존한다', () => {
+  const schema = schemaFor(1677320358, ['No.', 'Cat.1', 'Cat.2', 'Picture', '상품명(한글)', '상품명(영문)', 'Option (Ko/En)', 'Barcode', 'Material (Eng)', 'size (W x L x Hmm)', 'use (Eng)', 'Origin', 'HScode', '가격 (RRP)', '수량']);
+  const category1 = schema.fields.find((field) => field.label === 'Cat.1');
+  const category2 = schema.fields.find((field) => field.label === 'Cat.2');
+  const size = schema.fields.find((field) => field.label === 'size (W x L x Hmm)');
+  assert.deepEqual([category1.column, category2.column, size.column], [2, 3, 10]);
+  assert.deepEqual([category1.semantic, category2.semantic, size.semantic], ['category1', 'category2', 'size']);
+  assert.ok([category1.id, category2.id, size.id].every(Boolean));
+  assert.equal(new Set([category1.id, category2.id, size.id]).size, 3);
+  assert.deepEqual([category1.readOnly, category2.readOnly, size.readOnly], [false, false, false]);
 });

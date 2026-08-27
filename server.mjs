@@ -213,6 +213,8 @@ export function analyzeSheetHtml(html, tab) {
   const keyField = keyColumn ? 'productName' : null;
   const qtyColumn = findHeaderColumn(headers, quantityHeaders);
   const optionColumn = findHeaderColumn(headers, ['옵션', 'Option', 'Option(Ko/En)', '색상규격']);
+  const category1Column = findHeaderColumn(headers, ['Cat.1', 'Cat 1', 'Category 1', '대분류']);
+  const category2Column = findHeaderColumn(headers, ['Cat.2', 'Cat 2', 'Category 2', '소분류']);
   const sizeColumn = findHeaderColumn(headers, ['사이즈', 'Size', '규격', 'size(W x L x Hmm)']);
   const barcodeColumn = findHeaderColumn(headers, ['바코드', 'Barcode', 'EAN13', 'GTIN']);
   const styleNoColumn = findHeaderColumn(headers, ['STYLE NO', 'STYLE NO.', 'STYLE NUMBER', '스타일NO', '스타일번호']);
@@ -236,7 +238,7 @@ export function analyzeSheetHtml(html, tab) {
     headerRow: headerRow?.row || null,
     dataStartRow,
     headers,
-    columns: { key: keyColumn, keyField, productName: productNameColumn, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn, identityFields: ['productName', 'option', 'size', 'barcode', 'styleNo'].filter((field) => ({ productName: productNameColumn, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn })[field]), image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
+    columns: { key: keyColumn, keyField, productName: productNameColumn, category1: category1Column, category2: category2Column, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn, identityFields: ['productName', 'option', 'size', 'barcode', 'styleNo'].filter((field) => ({ productName: productNameColumn, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn })[field]), image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
     structureSignature,
     formatSignature,
     status: valid ? 'CONFIRMED' : 'NEEDS_REVIEW',

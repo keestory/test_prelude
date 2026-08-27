@@ -334,12 +334,16 @@ test('the public Sheet parser recognizes the header-only OIMU template contract'
   assert.equal(analyzed.columns.keyField, 'productName');
   assert.equal(analyzed.columns.image, 4);
   assert.equal(analyzed.columns.productName, 5);
+  assert.equal(analyzed.columns.category1, 2);
+  assert.equal(analyzed.columns.category2, 3);
   assert.equal(analyzed.columns.option, 7);
   assert.equal(analyzed.columns.barcode, 8);
   assert.equal(analyzed.columns.size, 10);
   assert.deepEqual(analyzed.columns.identityFields, ['productName', 'option', 'size', 'barcode']);
   assert.equal(analyzed.columns.retailPrice, 14);
   assert.equal(analyzed.columns.qty, 15);
+  assert.deepEqual(analyzed.headers.slice(1, 3), ['Cat.1', 'Cat.2']);
+  assert.equal(analyzed.headers[9], 'size (W x L x Hmm)');
   assert.equal(analyzed.status, 'CONFIRMED');
   assert.deepEqual(analyzed.issues, []);
 });

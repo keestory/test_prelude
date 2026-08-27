@@ -663,3 +663,42 @@ test('민도비또 Excel 등록 상품의 원본 STYLE NO를 미리보기 열 �
     templateCellsByColumn: { 1: 2, 2: '마스킹테이프', 6: 6000 },
   }), { 1: 2, 2: '마스킹테이프', 6: 6000 });
 });
+
+test('OIMU Cat.1 Cat.2 size를 원본 B C J열과 semantic 값으로 복원한다', () => {
+  const templateBase = [
+    functionSource(html, 'importedTemplateColumnNumber'),
+    functionSource(html, 'templateCellsByColumnForItem'),
+  ].join('\n');
+  const templateWrapperStart = html.indexOf('var templateCellsByColumnForItemBeforeNameIdentity');
+  const templateWrapperEnd = html.indexOf('var expandTemplatePassthroughColumnsBeforeOimuFields', templateWrapperStart);
+  const templateCells = new Function(
+    'positiveTemplateInteger',
+    `${templateBase}\n${html.slice(templateWrapperStart, templateWrapperEnd)}; return templateCellsByColumnForItem;`,
+  )((value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null);
+  const profile = {
+    fields: [
+      { id: 'cat1', semantic: 'category1', column: 2 },
+      { id: 'cat2', semantic: 'category2', column: 3 },
+      { id: 'size', semantic: 'size', column: 10 },
+    ],
+  };
+  const cells = templateCells({
+    sheetProfile: profile,
+    catalog: { customFields: { cat1: '독서', cat2: '책갈피', size: '50x137' } },
+  }, null);
+  assert.deepEqual(cells, { 2: '독서', 3: '책갈피', 10: '50x137' });
+
+  const expandBase = functionSource(html, 'expandTemplatePassthroughColumns');
+  const expandWrapperStart = html.indexOf('var expandTemplatePassthroughColumnsBeforeOimuFields');
+  const expandWrapperEnd = html.indexOf('var createGoogleSpreadsheetTemplateSnapshotBeforeOimuFields', expandWrapperStart);
+  const expand = new Function(
+    'positiveTemplateInteger',
+    `${expandBase}\n${html.slice(expandWrapperStart, expandWrapperEnd)}; return expandTemplatePassthroughColumns;`,
+  )((value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null);
+  const mapping = { columns: { category1: 2, category2: 3, size: 10, qty: 15 } };
+  const rows = [{ templateCellsByColumn: cells }];
+  expand(mapping, rows);
+  assert.equal(rows[0].category1, '독서');
+  assert.equal(rows[0].category2, '책갈피');
+  assert.equal(rows[0].size, '50x137');
+});

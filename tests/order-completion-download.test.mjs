@@ -177,11 +177,13 @@ test('완료 후 재다운로드에 필요한 상품과 브랜드 값은 주문 
   const snapshotSource = html.slice(snapshotStart, snapshotEnd);
   assert.match(snapshotSource, /productId:item\.productId/);
   assert.match(snapshotSource, /brandName:scope/);
+  assert.match(snapshotSource, /templateCellsByColumn:templateCellsByColumnForItem/);
 
   const exportStart = html.indexOf('function orderExportRows');
   const exportEnd = html.indexOf('function orderTableValues', exportStart);
   const exportSource = html.slice(exportStart, exportEnd);
   assert.match(exportSource, /productId:snapshot\.productId\|\|item/);
   assert.match(exportSource, /brand:excelSafeText\(snapshot\.brandName\|\|snapshot\.scopeName/);
+  assert.match(exportSource, /snapshot\.templateCellsByColumn/);
   assert.match(exportSource, /storedUnits=order\.status==='CONFIRMED'.*line\.confirmedOrderUnits/s);
 });

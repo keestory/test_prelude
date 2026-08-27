@@ -39,9 +39,12 @@ test('OIMU 2단 헤더는 6행의 상품 식별자와 5행의 가격을 함께 �
     (value) => String(value ?? '').trim(),
     (row, column) => row.getCell(column).value,
     (_supplierId, _sheetName, rawLabel) => ({
+      'Cat.1': 'category1',
+      'Cat.2': 'category2',
       'Name(Ko)': 'name',
       Barcode: 'barcode',
       Picture: 'image',
+      'size (W x L x Hmm)': 'size',
       가격: 'price',
       수량: 'ignore',
     })[rawLabel] || '',
@@ -56,7 +59,7 @@ test('OIMU 2단 헤더는 6행의 상품 식별자와 5행의 가격을 함께 �
     ['Date : '],
     [],
     ['No.', 'Cat.1', 'Cat.2', 'Picture', 'Product', '', '', '', '', '', '', '', '', '가격', '수량'],
-    ['', '', '', '', 'Name(Ko)', 'Name(En)', 'Option\n(Ko/En)', 'Barcode', 'Material\n(Eng)', 'size', 'use', 'Origin', 'HScode', '', ''],
+    ['', '', '', '', 'Name(Ko)', 'Name(En)', 'Option\n(Ko/En)', 'Barcode', 'Material\n(Eng)', 'size (W x L x Hmm)', 'use', 'Origin', 'HScode', '', ''],
     [1, '독서', '책갈피', '', '식물채집 책갈피', 'Plant collecting bookmark', '풍선덩굴', 8809627681454, 'polyester', '50x137', 'bookmark', 'S.Korea', '6307.90.9000', 14000, ''],
   ];
   const sheet = {
@@ -75,10 +78,18 @@ test('OIMU 2단 헤더는 6행의 상품 식별자와 5행의 가격을 함께 �
   const header = importHeaderMap(sheet, 'SUP-OIMU');
   assert.equal(header.row, 6);
   assert.equal(header.map.name, 5);
+  assert.equal(header.map.category1, 2);
+  assert.equal(header.map.category2, 3);
   assert.equal(header.map.barcode, 8);
+  assert.equal(header.map.size, 10);
   assert.equal(header.map.price, 14);
   assert.equal(header.map.image, 4);
   assert.equal(header.columns.find((column) => column.column === 4).inheritedHeader, true);
+  assert.equal(header.columns.find((column) => column.column === 2).raw, 'Cat.1');
+  assert.equal(header.columns.find((column) => column.column === 3).raw, 'Cat.2');
+  assert.equal(header.columns.find((column) => column.column === 10).raw, 'size (W x L x Hmm)');
+  assert.equal(header.columns.find((column) => column.column === 2).inheritedHeader, true);
+  assert.equal(header.columns.find((column) => column.column === 3).inheritedHeader, true);
   assert.equal(header.columns.find((column) => column.column === 14).raw, '가격');
   assert.equal(header.columns.find((column) => column.column === 14).inheritedHeader, true);
 });

@@ -89,4 +89,7 @@ test('일반 상품 가져오기도 RETAIL PRICE를 소비자가 price로 인식
   assert.equal(automaticImportField(normalizeImportHeader('RETAIL PRICE')), 'price');
   assert.equal(automaticImportField(normalizeImportHeader('가격')), '');
   assert.equal(automaticImportField(normalizeImportHeader('Picture')), 'image');
+  assert.equal(automaticImportField(normalizeImportHeader('Cat.1')), 'category1');
+  assert.equal(automaticImportField(normalizeImportHeader('Cat.2')), 'category2');
+  assert.equal(automaticImportField(normalizeImportHeader('size (W x L x Hmm)')), 'size');
 });
