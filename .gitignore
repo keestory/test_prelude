@@ -18,3 +18,5 @@ supabase/.branches/
 supabase/.temp/
 .vscode/
 .idea/
+.vercel
+.env*

@@ -69,3 +69,12 @@ test('raw Excel bytes stay local while operational metadata is in the remote sna
   assert.doesNotMatch(source, /supplierTemplateMemory/);
   assert.doesNotMatch(source, /bytes:/);
 });
+
+test('a confirmed remote purge clears local template bytes and stale supplier profiles', () => {
+  assert.match(html, /id="prelude-local-purge"/);
+  assert.match(html, /Number\(purge\.version\)!==1\|\|!purge\.localTemplates/);
+  assert.match(html, /database\.transaction\(\['templates','suppliers','catalogState'\],'readwrite'\)/);
+  assert.match(html, /transaction\.objectStore\('templates'\)\.clear\(\)/);
+  assert.match(html, /supplierStore\.clear\(\)/);
+  assert.match(html, /data-local-template-purge/);
+});

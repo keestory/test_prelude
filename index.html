@@ -4649,6 +4649,18 @@ html&gt;body{padding:0}&lt;/style&gt;
   window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
 })();
 &lt;/script&gt;
+&lt;script id=&quot;prelude-local-purge&quot;&gt;
+(async function(){
+  try{
+    if(!window.supabase||!window.indexedDB)return;
+    var client=window.supabase.createClient(&#x27;https://guonupybxnclgiiltsrr.supabase.co&#x27;,&#x27;sb_publishable_TPryH2K4VD-BVeEUQq67Hw_iypU-bm1&#x27;,{auth:{persistSession:true,autoRefreshToken:false,detectSessionInUrl:false}}),sessionResult=await client.auth.getSession(),session=sessionResult&amp;&amp;sessionResult.data&amp;&amp;sessionResult.data.session;
+    if(!session)return;
+    var workspaceResult=await client.from(&#x27;prelude_workspaces&#x27;).select(&#x27;state&#x27;).maybeSingle(),state=workspaceResult&amp;&amp;workspaceResult.data&amp;&amp;workspaceResult.data.state,purge=state&amp;&amp;state.purge;
+    if(workspaceResult.error||!purge||Number(purge.version)!==1||!purge.localTemplates)return;
+    await new Promise(function(resolve,reject){var request=indexedDB.open(&#x27;munbang-order-templates-v1&#x27;,3);request.onupgradeneeded=function(){var database=request.result;if(!database.objectStoreNames.contains(&#x27;templates&#x27;))database.createObjectStore(&#x27;templates&#x27;,{keyPath:&#x27;supplierId&#x27;});if(!database.objectStoreNames.contains(&#x27;suppliers&#x27;))database.createObjectStore(&#x27;suppliers&#x27;,{keyPath:&#x27;id&#x27;});if(!database.objectStoreNames.contains(&#x27;catalogState&#x27;))database.createObjectStore(&#x27;catalogState&#x27;,{keyPath:&#x27;id&#x27;});};request.onsuccess=function(){var database=request.result,transaction=database.transaction([&#x27;templates&#x27;,&#x27;suppliers&#x27;,&#x27;catalogState&#x27;],&#x27;readwrite&#x27;),supplierStore=transaction.objectStore(&#x27;suppliers&#x27;);transaction.objectStore(&#x27;templates&#x27;).clear();supplierStore.clear();(state.suppliers||[]).forEach(function(profile){supplierStore.put(profile);});transaction.objectStore(&#x27;catalogState&#x27;).put({id:&#x27;current&#x27;,schemaVersion:3,items:[],supplierOffers:[],supplierBrandCatalogs:{},movements:[],orders:[],savedAt:new Date().toISOString()});transaction.oncomplete=function(){database.close();document.getElementById(&#x27;munbang-inventory&#x27;).setAttribute(&#x27;data-local-template-purge&#x27;,&#x27;complete&#x27;);resolve();};transaction.onerror=function(){database.close();reject(transaction.error);};};request.onerror=function(){reject(request.error);};});
+  }catch(error){var root=document.getElementById(&#x27;munbang-inventory&#x27;);if(root)root.setAttribute(&#x27;data-local-template-purge&#x27;,&#x27;error&#x27;);}
+})();
+&lt;/script&gt;
 &lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
 &lt;script&gt;
 (() =&gt; {
