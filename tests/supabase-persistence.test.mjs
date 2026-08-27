@@ -50,7 +50,7 @@ test('the app gates operational data behind Supabase Auth and never resurrects r
   assert.match(html, /passwordInput\.value=''/);
   assert.match(html, /removeAttribute\('data-supabase-user'\)/);
   assert.match(html, /from\('prelude_workspaces'\)/);
-  assert.match(html, /rpc\('save_prelude_workspace'/);
+  assert.match(html, /rpcName=brandImport\?'save_prelude_workspace_with_brands':'save_prelude_workspace'/);
   assert.match(html, /function preludeEmptyWorkspaceStateRecord/);
   assert.match(html, /items:\[\],supplierOffers:\[\]/);
   assert.match(html, /source:'EMPTY_AFTER_CATALOG_RESET'/);
