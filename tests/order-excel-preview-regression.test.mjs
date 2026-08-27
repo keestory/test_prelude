@@ -84,7 +84,7 @@ test('OIMU legacy and temporary bindings collapse into the stable catalog identi
     },
     [
       { sheetName: 'Sheet1', entityId: 'OIMU-CATALOG', confirmedRole: 'PRODUCT_LIST', status: 'CONFIRMED' },
-      { sheetId: 1677320358, sheetName: 'Sheet2', entityId: 'SUP-OIMU-GS-1tsuYvoj-1677320358', confirmedRole: 'BRAND_PRODUCT', status: 'NEEDS_REVIEW', issues: ['상품 식별 열과 발주수량 열을 자동으로 확인하지 못했습니다.'] },
+      { sheetId: 1677320358, sheetName: 'Sheet2', entityId: 'SUP-OIMU-GS-1tsuYvoj-1677320358', confirmedRole: 'BRAND_PRODUCT', status: 'NEEDS_REVIEW', issues: [] },
     ],
     [
       { id: 'OIMU-CATALOG', name: 'OIMU Product List', sheet: 'Sheet1' },
