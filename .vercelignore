@@ -1,0 +1,4 @@
+# Publish only the static PRELUDE entry point and its Vercel configuration.
+/*
+!index.html
+!vercel.json
