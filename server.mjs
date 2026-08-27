@@ -208,26 +208,29 @@ function identifierFieldForHeader(header) {
 
 export function analyzeSheetHtml(html, tab) {
   const rows = parseSheetRows(html, tab.sheetId);
+  const identifierHeaders = ['상품번호', '상품코드', '품번', '바코드', 'Barcode', 'EAN13', 'GTIN', 'SKU', '프렐류드 상품ID'];
+  const quantityHeaders = ['발주수', '발주수량', '주문수량', '수량'];
   const headerRow = rows.find((row) => {
-    const key = findHeaderColumn(row.cells, ['상품번호', '상품코드', '품번', '바코드', 'SKU', '프렐류드 상품ID']);
-    const qty = findHeaderColumn(row.cells, ['발주수', '발주수량', '주문수량', '수량']);
+    const key = findHeaderColumn(row.cells, identifierHeaders);
+    const qty = findHeaderColumn(row.cells, quantityHeaders);
     return key && qty;
   });
   const headers = headerRow ? headerRow.cells : [];
-  const keyColumn = findHeaderColumn(headers, ['상품번호', '상품코드', '품번', '바코드', 'SKU', '프렐류드 상품ID']);
+  const keyColumn = findHeaderColumn(headers, identifierHeaders);
   const keyField = keyColumn ? identifierFieldForHeader(headers[keyColumn - 1]) : null;
-  const qtyColumn = findHeaderColumn(headers, ['발주수', '발주수량', '주문수량', '수량']);
-  const productNameColumn = findHeaderColumn(headers, ['제품명', '상품명', '상품명(KR)', '품명']);
-  const imageColumn = findHeaderColumn(headers, ['제품이미지', '상품이미지', '이미지', 'product image', 'image']);
+  const qtyColumn = findHeaderColumn(headers, quantityHeaders);
+  const productNameColumn = findHeaderColumn(headers, ['제품명', '상품명', '상품명(KR)', '상품명(한글)', '상품명(영문)', 'product name', '품명']);
+  const imageColumn = findHeaderColumn(headers, ['제품이미지', '상품이미지', '이미지', 'product image', 'image', 'picture', 'photo']);
   const orderUnitColumn = findHeaderColumn(headers, ['주문단위', '입수', '포장단위']);
-  const retailPriceColumn = findHeaderColumn(headers, ['소비자가', '정가', '판매가', 'RETAIL PRICE']);
+  const retailPriceColumn = findHeaderColumn(headers, ['소비자가', '정가', '판매가', 'RETAIL PRICE', '가격(RRP)', 'RRP']);
   const amountColumn = findHeaderColumn(headers, ['금액', '금 액', '합계금액']);
-  const dataRow = headerRow && rows.find((row) => row.row > headerRow.row && row.cells.slice(0, Math.max(headers.length, 10)).some((cell) => cell !== ''));
+  const dataRow = headerRow && keyColumn && rows.find((row) => row.row > headerRow.row && String(row.cells[keyColumn - 1] || '').trim() !== '');
+  const dataStartRow = headerRow ? dataRow?.row || (tab.rowCount > headerRow.row ? headerRow.row + 1 : null) : null;
   const valid = Boolean(headerRow && keyColumn && qtyColumn && keyColumn !== qtyColumn);
   const structureSignature = hash(JSON.stringify({
     headers: headers.map(normalizeHeader),
     headerRow: headerRow?.row || null,
-    dataStartRow: dataRow?.row || null,
+    dataStartRow,
     keyColumn,
     qtyColumn,
   }));
@@ -235,13 +238,17 @@ export function analyzeSheetHtml(html, tab) {
   return {
     ...tab,
     headerRow: headerRow?.row || null,
-    dataStartRow: dataRow?.row || null,
+    dataStartRow,
     headers,
     columns: { key: keyColumn, keyField, productName: productNameColumn, image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
     structureSignature,
     formatSignature,
     status: valid ? 'CONFIRMED' : 'NEEDS_REVIEW',
-    issues: valid ? [] : ['상품 식별 열과 발주수량 열을 자동으로 확인하지 못했습니다.'],
+    issues: valid ? [] : [
+      !keyColumn ? '상품 식별 열을 자동으로 확인하지 못했습니다.' : null,
+      !qtyColumn ? '발주수량 열을 자동으로 확인하지 못했습니다.' : null,
+      keyColumn && qtyColumn && keyColumn === qtyColumn ? '상품 식별 열과 발주수량 열은 서로 달라야 합니다.' : null,
+    ].filter(Boolean),
   };
 }
 

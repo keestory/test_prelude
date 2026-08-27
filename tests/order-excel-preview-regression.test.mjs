@@ -63,6 +63,44 @@ test('public Google Sheet inspection preserves a barcode identity and Korean pro
   assert.equal(analyzed.status, 'CONFIRMED');
 });
 
+test('OIMU uses the live Sheet2 identity and repairs the legacy Sheet1 binding', () => {
+  assert.match(html, /'SUP-OIMU':\[\{id:'OIMU-CATALOG'[^\]]*sheet:'Sheet2',sheetId:1677320358/);
+  assert.match(html, /function repairRequestedOimuBindings/);
+  assert.match(html, /entityId:'OIMU-CATALOG',inferredRole:'PRODUCT_LIST',confirmedRole:'PRODUCT_LIST'/);
+  assert.match(html, /상품명\(한글\).*상품명\(영문\).*product name/);
+  assert.match(html, /가격\\\(\?rrp\\\)\?/);
+});
+
+test('OIMU legacy and temporary bindings collapse into the stable catalog identity', () => {
+  const repair = new Function(
+    'offersForSupplier',
+    `${functionSource(html, 'hasGoogleSheetId')}\n${functionSource(html, 'repairRequestedOimuBindings')}\nreturn repairRequestedOimuBindings;`,
+  )(() => []);
+  const result = repair(
+    { id: 'SUP-OIMU' },
+    {
+      spreadsheetId: '1tsuYvojJlbD187iVA320QgDZmAfd17E7xOm6cz6mxaE',
+      tabs: [{ sheetId: 1677320358, sheetIndex: 0, title: 'Sheet2', hidden: false }],
+    },
+    [
+      { sheetName: 'Sheet1', entityId: 'OIMU-CATALOG', confirmedRole: 'PRODUCT_LIST', status: 'CONFIRMED' },
+      { sheetId: 1677320358, sheetName: 'Sheet2', entityId: 'SUP-OIMU-GS-1tsuYvoj-1677320358', confirmedRole: 'BRAND_PRODUCT', status: 'NEEDS_REVIEW', issues: ['상품 식별 열과 발주수량 열을 자동으로 확인하지 못했습니다.'] },
+    ],
+    [
+      { id: 'OIMU-CATALOG', name: 'OIMU Product List', sheet: 'Sheet1' },
+      { id: 'SUP-OIMU-GS-1tsuYvoj-1677320358', name: 'Sheet2', sheet: 'Sheet2' },
+    ],
+  );
+  assert.equal(result.bindings.length, 1);
+  assert.equal(result.bindings[0].entityId, 'OIMU-CATALOG');
+  assert.equal(result.bindings[0].sheetId, 1677320358);
+  assert.equal(result.bindings[0].sheetName, 'Sheet2');
+  assert.equal(result.bindings[0].confirmedRole, 'PRODUCT_LIST');
+  assert.equal(result.bindings[0].status, 'CONFIRMED');
+  assert.deepEqual(result.bindings[0].issues, []);
+  assert.deepEqual(result.brands.map((brand) => brand.id), ['OIMU-CATALOG']);
+});
+
 test('header-only order sheets are accepted for every supplier and start directly below the header', () => {
   const source = functionSource(html, 'analyzeSupplierTemplateFile');
   assert.doesNotMatch(source, /blankOrderTemplate=supplierId===/);

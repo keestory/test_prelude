@@ -314,3 +314,27 @@ test('the public Sheet parser maps RETAIL PRICE to the consumer retail price col
   assert.equal(analyzed.columns.retailPrice, 4);
   assert.equal(analyzed.status, 'CONFIRMED');
 });
+
+test('the public Sheet parser recognizes the header-only OIMU template contract', () => {
+  const tab = { sheetIndex: 0, sheetId: 1677320358, title: 'Sheet2', rowCount: 999, columnCount: 26, hidden: false };
+  const htmlFixture = [
+    '<table>',
+    '<tr><th id="1677320358R0">1</th><td>OIMU Product List</td></tr>',
+    '<tr><th id="1677320358R1">2</th><td></td></tr>',
+    '<tr><th id="1677320358R2">3</th><td>Date :</td></tr>',
+    '<tr><th id="1677320358R3">4</th><td></td></tr>',
+    '<tr><th id="1677320358R4">5</th><td>No.</td><td>Cat.1</td><td>Cat.2</td><td>Picture</td><td>상품명(한글)</td><td>상품명(영문)</td><td>Option<br>(Ko/En)</td><td>Barcode</td><td>Material<br>(Eng)</td><td>size<br>(W x L x Hmm)</td><td>use<br>(Eng)</td><td>Origin</td><td>HScode</td><td>가격<br>(RRP)</td><td>수량</td></tr>',
+    '</table>',
+  ].join('');
+  const analyzed = analyzeSheetHtml(htmlFixture, tab);
+  assert.equal(analyzed.headerRow, 5);
+  assert.equal(analyzed.dataStartRow, 6);
+  assert.equal(analyzed.columns.key, 8);
+  assert.equal(analyzed.columns.keyField, 'barcode');
+  assert.equal(analyzed.columns.image, 4);
+  assert.equal(analyzed.columns.productName, 5);
+  assert.equal(analyzed.columns.retailPrice, 14);
+  assert.equal(analyzed.columns.qty, 15);
+  assert.equal(analyzed.status, 'CONFIRMED');
+  assert.deepEqual(analyzed.issues, []);
+});
