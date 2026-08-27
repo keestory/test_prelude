@@ -597,3 +597,26 @@ test('빈 민도비또 상품 행에는 STYLE NO와 소비자가 passthrough 값
   assert.equal(rows[1].templateCell1, 2);
   assert.equal(rows[1].templateCell6, 6000);
 });
+
+test('민도비또 Excel 등록 상품의 원본 STYLE NO를 미리보기 열 값으로 복원한다', () => {
+  const source = [
+    functionSource(html, 'importedTemplateColumnNumber'),
+    functionSource(html, 'templateCellsByColumnForItem'),
+  ].join('\n');
+  const templateCells = new Function(
+    'positiveTemplateInteger',
+    `${source}; return templateCellsByColumnForItem;`,
+  )((value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null);
+  const item = {
+    customAttributes: { NO: '1', 'STYLE NO': '마스킹\n테이프', 비고: '' },
+    importColumnMapping: [
+      { column: 'A', targetField: 'custom:no', sourceHeader: 'NO' },
+      { column: 'B', targetField: 'min', sourceHeader: 'STYLE NO' },
+      { column: 'C', targetField: 'barcode', sourceHeader: '바코드' },
+    ],
+  };
+  assert.deepEqual(templateCells(item, null), { 1: '1', 2: '마스킹\n테이프' });
+  assert.deepEqual(templateCells(null, {
+    templateCellsByColumn: { 1: 2, 2: '마스킹테이프', 6: 6000 },
+  }), { 1: 2, 2: '마스킹테이프', 6: 6000 });
+});
