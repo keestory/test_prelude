@@ -29,6 +29,8 @@ function functionSource(html, name) {
 
 const raw = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const html = decodeSrcdoc(raw);
+const googleSheetsEdge = await readFile(new URL('../supabase/functions/google-sheets/index.ts', import.meta.url), 'utf8');
+const googleSheetsServer = await readFile(new URL('../server.mjs', import.meta.url), 'utf8');
 
 test('public Google Sheet inspection records the product image column', () => {
   const tab = { sheetIndex: 0, sheetId: 7, title: 'Collection', rowCount: 20, columnCount: 7, hidden: false };
@@ -149,6 +151,42 @@ test('stored snapshot contracts recover a confirmed live binding by immutable sh
   assert.equal(output.binding.googleSheetName, 'Google Sheet Name Longer Than Excel Allows');
 });
 
+test('stored snapshot uses the exact Excel contract name when an existing binding has a Google alias', () => {
+  const source = [
+    functionSource(html, 'bindingOutputContract'),
+    functionSource(html, 'storedTemplateOutputBindings'),
+    functionSource(html, 'resolveOutputContract'),
+  ].join('\n');
+  const resolve = new Function(
+    'supplierSheetBindings',
+    'isProductSheetRole',
+    'findSupplier',
+    'brandCatalogFor',
+    `${source}; return resolveOutputContract;`,
+  )(
+    {},
+    (role) => role === 'CATEGORY_PRODUCT',
+    () => ({ template: { brandLayoutPolicy: { mode: 'PER_SCOPE' } } }),
+    () => ({ linkStatus: 'CONFIRMED' }),
+  );
+  const version = {
+    contracts: [{ sheetName: '문구류', row: 1, dataStartRow: 2, columns: { barcode: 3, qty: 7 } }],
+    sheets: [{ name: '문구류' }],
+    bindings: [{
+      sheetName: '문구류(마테, 메모지, 스티커)',
+      googleSheetName: '문구류(마테, 메모지, 스티커)',
+      excelSheetName: '문구류',
+      confirmedRole: 'CATEGORY_PRODUCT',
+      entityId: 'MINDO-STATIONERY',
+      status: 'CONFIRMED',
+    }],
+    brandLayoutPolicy: { mode: 'PER_SCOPE' },
+  };
+  const output = resolve('SUP-MINDOBITTO', 'MINDO-STATIONERY', version.bindings, version);
+  assert.equal(output.sheetName, '문구류');
+  assert.equal(output.contract, version.contracts[0]);
+});
+
 test('Google and Excel sheet aliases keep the selected two-row preview target', () => {
   const namesSource = functionSource(html, 'outputTargetSheetNames');
   const matchesSource = functionSource(html, 'outputTargetMatchesSheet');
@@ -203,6 +241,164 @@ test('draft and saved order rows carry product images into stored-template compi
   assert.match(compileSource, /'supplierCode','barcode','productId','sku'/);
 });
 
+test('후긴앤무닌 A:F 양식은 No 카테고리명 소비자가를 상품 상세 semantic으로 연결한다', () => {
+  const meaningSource = functionSource(html, 'templateHeaderMeaning');
+  const templateHeaderMeaning = new Function(
+    'normalizeTemplateHeader',
+    `${meaningSource}; return templateHeaderMeaning;`,
+  )((value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, '').toLowerCase());
+  assert.equal(templateHeaderMeaning('No.'), 'sequence');
+  assert.equal(templateHeaderMeaning('카테고리명'), 'category');
+  assert.equal(templateHeaderMeaning('소비자가'), 'retailPrice');
+
+  const mapSource = functionSource(html, 'templateColumnMap');
+  const templateColumnMap = new Function(
+    'normalizeTemplateHeader',
+    'excelPreviewValue',
+    `${mapSource}; return templateColumnMap;`,
+  )(
+    (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, '').toLowerCase(),
+    (cell) => cell.value ?? '',
+  );
+  const values = [
+    ['No.', '카테고리명', '상품명', '바코드', '소비자가', '수량'],
+    ['', '', '', '', '', ''],
+  ];
+  const getRow = (rowNumber) => ({
+    eachCell: ({ includeEmpty }, callback) => values[rowNumber - 1].forEach((value, index) => {
+      if (includeEmpty || value !== '') callback({ value }, index + 1);
+    }),
+    getCell: (column) => ({ value: values[rowNumber - 1][column - 1] }),
+  });
+  const mapping = templateColumnMap({ rowCount: values.length, getRow });
+  assert.deepEqual(mapping.columns, {
+    sequence: 1,
+    category: 2,
+    productName: 3,
+    barcode: 4,
+    retailPrice: 5,
+    qty: 6,
+  });
+});
+
+test('발주서 No는 시트별 1부터 연속되고 상품 상세 카테고리 소비자가를 row와 snapshot에 보존한다', () => {
+  const sequenceSource = functionSource(html, 'sequenceTemplateRows');
+  const sequenceTemplateRows = new Function(`${sequenceSource}; return sequenceTemplateRows;`)();
+  const rows = sequenceTemplateRows([
+    { sheet: '전품목 목록', sku: 'A', retailPrice: 4000 },
+    { sheet: '전품목 목록', sku: 'B', retailPrice: 0 },
+    { sheet: '다른 시트', sku: 'C' },
+  ]);
+  assert.deepEqual(rows.map((row) => row.sequence), [1, 2, 1]);
+  assert.deepEqual(rows.map((row) => row.retailPrice), [4000, null, null]);
+
+  const draftSource = functionSource(html, 'templateRowsFromDraft');
+  const orderSource = functionSource(html, 'orderExportRows');
+  const snapshotStart = html.indexOf('function buildOrderLineSnapshot');
+  const snapshotSource = html.slice(snapshotStart, html.indexOf('\n  function outputTargetsFromOrderLines', snapshotStart));
+  assert.match(draftSource, /category:item&&item\.category/);
+  assert.match(draftSource, /retailPrice:itemRetailUnitPrice\(item\)/);
+  assert.match(orderSource, /category:excelSafeText\(snapshot\.category/);
+  assert.match(orderSource, /retailPrice:Number\(snapshot\.consumerPrice/);
+  assert.match(snapshotSource, /category:item\.category/);
+  assert.match(snapshotSource, /templateCellsByColumn:templateCellsByColumnForItem\(item,offer\)/);
+});
+
+test('빈 소비자가 셀만 상품 상세값으로 채우고 기존 값과 수식은 보존한다', async () => {
+  const start = html.indexOf('var compileStoredTemplateSheetMappedFieldsBase');
+  const end = html.indexOf('\n  function htmlSafe', start);
+  const wrapperSource = html.slice(start, end);
+  const cells = new Map();
+  const key = (row, column) => `${row}:${column}`;
+  const getCell = (row, column) => {
+    const cellKey = key(row, column);
+    if (!cells.has(cellKey)) cells.set(cellKey, { value: null, numFmt: '' });
+    return cells.get(cellKey);
+  };
+  cells.set(key(2, 4), { value: '0001003658502' });
+  cells.set(key(2, 5), { value: null, numFmt: '' });
+  cells.set(key(3, 4), { value: '0001001711902' });
+  cells.set(key(3, 5), { value: { formula: '1000+1500', result: 2500 }, numFmt: '#,##0' });
+  cells.set(key(4, 4), { value: '0001009999999' });
+  cells.set(key(4, 5), { value: 7777, numFmt: '#,##0' });
+  cells.set(key(4, 1), { value: 42 });
+  cells.set(key(4, 2), { value: '공급처 원본 카테고리' });
+  const compiled = {
+    matchKey: 'barcode',
+    mapping: { row: 1, dataStartRow: 2, columns: { barcode: 4, retailPrice: 5 } },
+    sheet: { rowCount: 4, getRow: (row) => ({ getCell: (column) => getCell(row, column) }) },
+  };
+  const sourceWorkbook = { getWorksheet: () => compiled.sheet };
+  const compileStoredTemplateSheet = new Function(
+    'compileStoredTemplateSheet',
+    'positiveTemplateInteger',
+    'excelPreviewValue',
+    'templateColumnMap',
+    'cloneExcelStyle',
+    `${wrapperSource}; return compileStoredTemplateSheet;`,
+  )(
+    async () => {
+      getCell(3, 5).value = 9999;
+      getCell(4, 5).value = 9999;
+      getCell(4, 1).value = 3;
+      getCell(4, 2).value = 'PRELUDE 카테고리';
+      return compiled;
+    },
+    (value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null,
+    (cell) => cell.value && typeof cell.value === 'object' && cell.value.result != null ? cell.value.result : cell.value ?? '',
+    () => ({ columns: { sequence: 1, category: 2, barcode: 4, retailPrice: 5 } }),
+    (value) => value && typeof value === 'object' ? structuredClone(value) : value,
+  );
+  await compileStoredTemplateSheet({ contracts: [] }, '전품목 목록', [
+    { barcode: '0001003658502', retailPrice: 4000 },
+    { barcode: '0001001711902', retailPrice: 9999 },
+    { barcode: '0001009999999', retailPrice: 8888 },
+  ], sourceWorkbook);
+  assert.equal(getCell(2, 5).value, 4000);
+  assert.equal(getCell(2, 5).numFmt, '#,##0');
+  assert.deepEqual(getCell(3, 5).value, { formula: '1000+1500', result: 2500 });
+  assert.equal(getCell(4, 5).value, 7777);
+  assert.equal(getCell(4, 1).value, 42);
+  assert.equal(getCell(4, 2).value, '공급처 원본 카테고리');
+});
+
+test('소비자가 0원 또는 빈값은 미리보기 반영 성공으로 처리하지 않는다', () => {
+  const start = html.indexOf('var auditCompiledTemplateRowsPositiveRetailBase');
+  const end = html.indexOf('\n  async function renderResolvedStoredTemplatePreview', start);
+  const wrapperSource = html.slice(start, end);
+  const cells = new Map([
+    ['2:4', { value: '0001003658502' }],
+    ['2:5', { value: 0 }],
+  ]);
+  const compiled = {
+    matchKey: 'barcode',
+    mapping: { row: 1, dataStartRow: 2, columns: { barcode: 4, retailPrice: 5 } },
+    sheet: {
+      rowCount: 2,
+      getRow: (row) => ({ getCell: (column) => cells.get(`${row}:${column}`) || { value: null } }),
+    },
+  };
+  const auditCompiledTemplateRows = new Function(
+    'auditCompiledTemplateRows',
+    'positiveTemplateInteger',
+    'excelPreviewValue',
+    'templateCostNumber',
+    `${wrapperSource}; return auditCompiledTemplateRows;`,
+  )(
+    () => ({ confirmed: 1, rowNumbers: [2], missing: [], missingImages: [] }),
+    (value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null,
+    (cell) => cell.value ?? '',
+    (value) => {
+      const parsed = Number(String(value).replace(/,/g, ''));
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+  );
+  const audit = auditCompiledTemplateRows(compiled, [{ barcode: '0001003658502', productName: '초여름' }]);
+  assert.equal(audit.confirmed, 0);
+  assert.deepEqual(audit.rowNumbers, []);
+  assert.deepEqual(audit.missing, ['초여름']);
+});
+
 test('a numbered but otherwise blank template row is available for a new product', () => {
   const helperSource = functionSource(html, 'templateRowAcceptsNewProduct');
   const accepts = new Function('excelPreviewValue', `${helperSource}; return templateRowAcceptsNewProduct;`)(
@@ -218,9 +414,13 @@ test('a numbered but otherwise blank template row is available for a new product
 
 test('preview success is gated by cells confirmed in the compiled workbook', () => {
   const auditSource = functionSource(html, 'auditCompiledTemplateRows');
+  const mappedAuditStart = html.indexOf('var auditCompiledTemplateRowsMappedFieldsBase');
+  const mappedAuditSource = html.slice(mappedAuditStart, html.indexOf('\n  async function renderResolvedStoredTemplatePreview', mappedAuditStart));
   const previewSource = functionSource(html, 'renderResolvedStoredTemplatePreview');
   assert.match(auditSource, /confirmedRows\.length/);
   assert.match(auditSource, /missingImages/);
+  assert.match(mappedAuditSource, /columns\.sequence,columns\.category,columns\.retailPrice/);
+  assert.match(mappedAuditSource, /result\.confirmed=result\.rowNumbers\.length/);
   assert.match(previewSource, /audit\.confirmed!==rows\.length/);
   assert.match(previewSource, /미리보기 반영 확인/);
   assert.match(previewSource, /data-template-preview-row-count/);
@@ -271,12 +471,12 @@ test('민도비또의 실제 Google 탭을 기존 상품군 ID에 자동 재연�
     {
       checkedAt: '2026-08-27T00:00:00.000Z',
       tabs: [{
-        title: '문구류(마테, 메모지, 스티커)', sheetId: 528968736, sheetIndex: 0,
+        title: '문구류(마테, 메모지, 스티커)', sheetId: 401919740, sheetIndex: 0,
         status: 'CONFIRMED', headerRow: 1, dataStartRow: 2, columns: { key: 3, keyField: 'barcode', qty: 7 },
       }],
     },
     {
-      bindings: [{ sheetId: 528968736, sheetName: '문구류(마테, 메모지, 스티커)', entityId: 'TEMP-GS', confirmedRole: 'CATEGORY_PRODUCT' }],
+      bindings: [{ sheetId: 401919740, sheetName: '문구류(마테, 메모지, 스티커)', entityId: 'TEMP-GS', confirmedRole: 'CATEGORY_PRODUCT' }],
       brands: [{ id: 'TEMP-GS', name: '임시 탭' }],
       status: 'NEEDS_REVIEW',
     },
@@ -289,16 +489,95 @@ test('민도비또의 실제 Google 탭을 기존 상품군 ID에 자동 재연�
 });
 
 test('민도비또 3개 상품과 사용자 지정 Google 양식을 영구 마이그레이션한다', () => {
+  const definitionsSource = functionSource(html, 'requestedMindobittoSheetDefinitions');
   const productsSource = functionSource(html, 'requestedMindobittoProducts');
   const upsertSource = functionSource(html, 'upsertRequestedMindobittoProduct');
   const ensureSource = functionSource(html, 'ensureRequestedMindobittoSetup');
+  assert.match(definitionsSource, /sheetId:401919740/);
+  assert.match(definitionsSource, /sheetId:528968736/);
   assert.match(productsSource, /8800333170126/);
   assert.match(productsSource, /8800333170133/);
   assert.match(productsSource, /8800333170003/);
   assert.match(productsSource, /no:2/);
   assert.match(upsertSource, /templateCellsByColumn:.*1:product\.no,2:product\.style,6:product\.price/);
   assert.match(ensureSource, /1QEjVfGnsC1-KY0eJcIY86mD7b-xmkNAtptoyucwfOHc/);
-  assert.match(ensureSource, /mindobittoOrderMigration:\{version:3/);
+  assert.match(ensureSource, /mindobittoOrderMigration:\{version:4/);
+  assert.match(ensureSource, /Number\(supplier\.mindobittoOrderMigration\.version\)>=4/);
+});
+
+test('민도비또 v3의 짧은 Excel 별칭을 실제 탭 이름과 계약으로 자동 복구한다', () => {
+  const source = [
+    functionSource(html, 'requestedMindobittoSheetDefinitions'),
+    functionSource(html, 'requestedMindobittoSheetMatch'),
+    functionSource(html, 'requestedMindobittoBinding'),
+    functionSource(html, 'repairRequestedMindobittoVersion'),
+  ].join('\n');
+  const helpers = new Function(
+    'seedSupplierBrandCatalogs',
+    'canonicalScopeName',
+    'isProductSheetRole',
+    'cloneExcelStyle',
+    `${source}; return { definitions: requestedMindobittoSheetDefinitions, repair: repairRequestedMindobittoVersion };`,
+  )(
+    { 'SUP-MINDOBITTO': [{ id: 'MINDO-STATIONERY', name: '문구류' }, { id: 'MINDO-NOTE', name: '노트, 파일' }] },
+    (value) => String(value || '').normalize('NFKC').toLowerCase().replace(/[^0-9a-z가-힣]+/g, ''),
+    (role) => role === 'CATEGORY_PRODUCT',
+    (value) => JSON.parse(JSON.stringify(value)),
+  );
+  const definitions = helpers.definitions();
+  const version = {
+    bindings: [
+      { entityId: 'MINDO-STATIONERY', sheetId: 528968736, sheetName: '문구류(마테, 메모지, 스티커)', googleSheetName: '문구류(마테, 메모지, 스티커)', excelSheetName: '문구류', confirmedRole: 'CATEGORY_PRODUCT', status: 'CONFIRMED' },
+      { entityId: 'MINDO-NOTE', sheetName: '노트, 파일', excelSheetName: '노트, 파일', confirmedRole: 'CATEGORY_PRODUCT', status: 'CONFIRMED' },
+    ],
+    sheets: [
+      { name: '문구류(마테, 메모지, 스티커)', sheetIndex: 0 },
+      { name: '노트, 파일', sheetIndex: 1 },
+    ],
+    contracts: [
+      { sheetName: '문구류', row: 1, dataStartRow: 2, columns: { barcode: 3, qty: 7 } },
+      { sheetName: '노트, 파일', row: 1, dataStartRow: 2, columns: { barcode: 3, qty: 7 } },
+    ],
+  };
+  helpers.repair(version, definitions, []);
+  assert.deepEqual(version.bindings.map((binding) => binding.sheetId), [401919740, 528968736]);
+  assert.deepEqual(version.bindings.map((binding) => binding.excelSheetName), ['문구류(마테, 메모지, 스티커)', '노트, 파일']);
+  assert.deepEqual(version.contracts.map((contract) => contract.sheetName), ['문구류(마테, 메모지, 스티커)', '노트, 파일']);
+  assert.equal(version.contracts[0].dataStartRow, 2);
+  assert.equal(version.contracts[0].columns.productName, 5);
+  assert.equal(version.contracts[0].columns.retailPrice, 6);
+  assert.equal(version.contracts[0].columns.qty, 7);
+  assert.equal(version.contracts[0].rowMatchKey, 'barcode');
+});
+
+test('header-only 저장 양식은 실제 시트명과 dataStartRow 계약이 일치할 때만 재사용한다', () => {
+  const source = [
+    functionSource(html, 'bindingOutputContract'),
+    functionSource(html, 'storedTemplateVersionCoherent'),
+  ].join('\n');
+  const coherent = new Function(
+    'isProductSheetRole',
+    `${source}; return storedTemplateVersionCoherent;`,
+  )((role) => role === 'CATEGORY_PRODUCT');
+  const version = {
+    sheets: [{ name: '문구류(마테, 메모지, 스티커)' }],
+    bindings: [{ sheetName: '문구류(마테, 메모지, 스티커)', excelSheetName: '문구류(마테, 메모지, 스티커)', confirmedRole: 'CATEGORY_PRODUCT', status: 'CONFIRMED' }],
+    contracts: [{ sheetName: '문구류(마테, 메모지, 스티커)', row: 1, dataStartRow: 2, columns: { qty: 7 } }],
+  };
+  assert.equal(coherent(version), true);
+  version.bindings[0].excelSheetName = '문구류';
+  assert.equal(coherent(version), false);
+});
+
+test('Supabase Google Sheets 분석기도 민도비또 헤더와 바코드 키를 보존한다', () => {
+  assert.match(googleSheetsEdge, /function identifierFieldForHeader/);
+  assert.match(googleSheetsEdge, /"상품명\(KR\)"/);
+  assert.match(googleSheetsEdge, /"RETAIL PRICE"/);
+  assert.match(googleSheetsEdge, /columns: \{ key: keyColumn, keyField,/);
+  const edgeSignature = googleSheetsEdge.slice(googleSheetsEdge.indexOf('const structureSignature'), googleSheetsEdge.indexOf('const formatSignature'));
+  const serverSignature = googleSheetsServer.slice(googleSheetsServer.indexOf('const structureSignature'), googleSheetsServer.indexOf('const formatSignature'));
+  assert.doesNotMatch(edgeSignature, /keyField/);
+  assert.doesNotMatch(serverSignature, /keyField/);
 });
 
 test('빈 민도비또 상품 행에는 STYLE NO와 소비자가 passthrough 값을 함께 쓴다', () => {

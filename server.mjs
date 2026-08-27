@@ -229,7 +229,6 @@ export function analyzeSheetHtml(html, tab) {
     headerRow: headerRow?.row || null,
     dataStartRow: dataRow?.row || null,
     keyColumn,
-    keyField,
     qtyColumn,
   }));
   const formatSignature = hash(rows.slice(0, 40).map((row) => row.source.replace(/>([^<]*)</g, '><').replace(/\s+/g, ' ')).join(''));
