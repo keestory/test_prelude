@@ -1,0 +1,20 @@
+.DS_Store
+*.zip
+
+# Generated QA captures and local outputs
+*.png
+*.jpg
+outputs/
+design-qa-order-management-archive.md
+design-qa.md
+assets/
+docs/
+
+# Previous packaged copy; the root index.html is authoritative.
+PRELUDE_재고관리_20260817/
+
+# Local Supabase and editor state
+supabase/.branches/
+supabase/.temp/
+.vscode/
+.idea/

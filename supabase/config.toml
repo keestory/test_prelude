@@ -1,0 +1,5 @@
+project_id = "prelude-inventory"
+
+[functions.google-sheets]
+verify_jwt = false
+
