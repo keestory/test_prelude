@@ -40,11 +40,15 @@ test('workspace save is revisioned, idempotent, and refuses last-write-wins', ()
 test('the app gates operational data behind Supabase Auth and never resurrects reset local products', () => {
   assert.match(html, /id="mb-cloud-gate"/);
   assert.match(html, /id="mb-cloud-password"/);
+  assert.match(html, /id="mb-cloud-login" type="button"/);
   assert.match(html, /signInWithPassword/);
+  assert.match(html, /addEventListener\('click',submitPreludeLogin\)/);
+  assert.match(html, /event\.key==='Enter'/);
   assert.doesNotMatch(html, /signInWithOtp/);
   assert.doesNotMatch(html, /password\.length&lt;8/);
   assert.match(html, /child\.setAttribute\('inert',''\)/);
   assert.match(html, /passwordInput\.value=''/);
+  assert.match(html, /removeAttribute\('data-supabase-user'\)/);
   assert.match(html, /from\('prelude_workspaces'\)/);
   assert.match(html, /rpc\('save_prelude_workspace'/);
   assert.match(html, /function preludeEmptyWorkspaceStateRecord/);
