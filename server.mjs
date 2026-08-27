@@ -198,28 +198,24 @@ function findHeaderColumn(headers, candidates) {
   return index < 0 ? null : index + 1;
 }
 
-function identifierFieldForHeader(header) {
-  const normalized = normalizeHeader(header);
-  if (['바코드', 'barcode', 'ean13', 'gtin'].includes(normalized)) return 'barcode';
-  if (normalized.includes('프렐류드') || normalized.includes('prelude')) return 'productId';
-  if (normalized === 'sku' || normalized === '옵션sku') return 'sku';
-  return 'supplierCode';
-}
-
 export function analyzeSheetHtml(html, tab) {
   const rows = parseSheetRows(html, tab.sheetId);
-  const identifierHeaders = ['상품번호', '상품코드', '품번', '바코드', 'Barcode', 'EAN13', 'GTIN', 'SKU', '프렐류드 상품ID'];
-  const quantityHeaders = ['발주수', '발주수량', '주문수량', '수량'];
+  const productNameHeaders = ['제품명', '상품명', '상품명(KR)', '상품명(한글)', '상품명(영문)', 'product name', '품명'];
+  const quantityHeaders = ['발주수', '발주수량', '발주량', '발주개수', '주문수', '주문수량', '주문량', '주문개수', '수량', '개수', 'qty', 'quantity', 'count', 'order qty', 'order quantity'];
   const headerRow = rows.find((row) => {
-    const key = findHeaderColumn(row.cells, identifierHeaders);
+    const key = findHeaderColumn(row.cells, productNameHeaders);
     const qty = findHeaderColumn(row.cells, quantityHeaders);
     return key && qty;
   });
   const headers = headerRow ? headerRow.cells : [];
-  const keyColumn = findHeaderColumn(headers, identifierHeaders);
-  const keyField = keyColumn ? identifierFieldForHeader(headers[keyColumn - 1]) : null;
+  const productNameColumn = findHeaderColumn(headers, productNameHeaders);
+  const keyColumn = productNameColumn;
+  const keyField = keyColumn ? 'productName' : null;
   const qtyColumn = findHeaderColumn(headers, quantityHeaders);
-  const productNameColumn = findHeaderColumn(headers, ['제품명', '상품명', '상품명(KR)', '상품명(한글)', '상품명(영문)', 'product name', '품명']);
+  const optionColumn = findHeaderColumn(headers, ['옵션', 'Option', 'Option(Ko/En)', '색상규격']);
+  const sizeColumn = findHeaderColumn(headers, ['사이즈', 'Size', '규격', 'size(W x L x Hmm)']);
+  const barcodeColumn = findHeaderColumn(headers, ['바코드', 'Barcode', 'EAN13', 'GTIN']);
+  const styleNoColumn = findHeaderColumn(headers, ['STYLE NO', 'STYLE NO.', 'STYLE NUMBER', '스타일NO', '스타일번호']);
   const imageColumn = findHeaderColumn(headers, ['제품이미지', '상품이미지', '이미지', 'product image', 'image', 'picture', 'photo']);
   const orderUnitColumn = findHeaderColumn(headers, ['주문단위', '입수', '포장단위']);
   const retailPriceColumn = findHeaderColumn(headers, ['소비자가', '정가', '판매가', 'RETAIL PRICE', '가격(RRP)', 'RRP']);
@@ -240,12 +236,12 @@ export function analyzeSheetHtml(html, tab) {
     headerRow: headerRow?.row || null,
     dataStartRow,
     headers,
-    columns: { key: keyColumn, keyField, productName: productNameColumn, image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
+    columns: { key: keyColumn, keyField, productName: productNameColumn, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn, identityFields: ['productName', 'option', 'size', 'barcode', 'styleNo'].filter((field) => ({ productName: productNameColumn, option: optionColumn, size: sizeColumn, barcode: barcodeColumn, styleNo: styleNoColumn })[field]), image: imageColumn, retailPrice: retailPriceColumn, orderUnit: orderUnitColumn, qty: qtyColumn, amount: amountColumn },
     structureSignature,
     formatSignature,
     status: valid ? 'CONFIRMED' : 'NEEDS_REVIEW',
     issues: valid ? [] : [
-      !keyColumn ? '상품 식별 열을 자동으로 확인하지 못했습니다.' : null,
+      !keyColumn ? '상품명 열을 자동으로 확인하지 못했습니다.' : null,
       !qtyColumn ? '발주수량 열을 자동으로 확인하지 못했습니다.' : null,
       keyColumn && qtyColumn && keyColumn === qtyColumn ? '상품 식별 열과 발주수량 열은 서로 달라야 합니다.' : null,
     ].filter(Boolean),

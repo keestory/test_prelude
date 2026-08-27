@@ -46,7 +46,7 @@ test('public Google Sheet inspection records the product image column', () => {
   assert.equal(analyzed.status, 'CONFIRMED');
 });
 
-test('public Google Sheet inspection preserves a barcode identity and Korean product-name header', () => {
+test('public Google Sheet inspection uses the Korean product name first and keeps barcode as a discriminator', () => {
   const tab = { sheetIndex: 0, sheetId: 9, title: '문구류', rowCount: 50, columnCount: 8, hidden: false };
   const fixture = [
     '<table>',
@@ -55,8 +55,10 @@ test('public Google Sheet inspection preserves a barcode identity and Korean pro
     '</table>',
   ].join('');
   const analyzed = analyzeSheetHtml(fixture, tab);
-  assert.equal(analyzed.columns.key, 3);
-  assert.equal(analyzed.columns.keyField, 'barcode');
+  assert.equal(analyzed.columns.key, 5);
+  assert.equal(analyzed.columns.keyField, 'productName');
+  assert.equal(analyzed.columns.barcode, 3);
+  assert.deepEqual(analyzed.columns.identityFields, ['productName', 'barcode', 'styleNo']);
   assert.equal(analyzed.columns.image, 4);
   assert.equal(analyzed.columns.productName, 5);
   assert.equal(analyzed.columns.qty, 7);
@@ -607,8 +609,11 @@ test('header-only 저장 양식은 실제 시트명과 dataStartRow 계약이 �
   assert.equal(coherent(version), false);
 });
 
-test('Supabase Google Sheets 분석기도 민도비또 헤더와 바코드 키를 보존한다', () => {
-  assert.match(googleSheetsEdge, /function identifierFieldForHeader/);
+test('Supabase Google Sheets 분석기도 상품명 우선과 보조 식별 열을 보존한다', () => {
+  assert.match(googleSheetsEdge, /const productNameHeaders/);
+  assert.match(googleSheetsEdge, /const keyField = keyColumn \? "productName"/);
+  assert.match(googleSheetsEdge, /styleNoColumn/);
+  assert.match(googleSheetsEdge, /identityFields/);
   assert.match(googleSheetsEdge, /"상품명\(KR\)"/);
   assert.match(googleSheetsEdge, /"RETAIL PRICE"/);
   assert.match(googleSheetsEdge, /columns: \{ key: keyColumn, keyField,/);

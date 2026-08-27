@@ -297,7 +297,8 @@ test('the public Sheet parser detects header, quantity column, and first data ro
   const analyzed = analyzeSheetHtml(htmlFixture, tab);
   assert.equal(analyzed.headerRow, 2);
   assert.equal(analyzed.dataStartRow, 3);
-  assert.equal(analyzed.columns.key, 1);
+  assert.equal(analyzed.columns.key, 2);
+  assert.equal(analyzed.columns.keyField, 'productName');
   assert.equal(analyzed.columns.qty, 6);
   assert.equal(analyzed.status, 'CONFIRMED');
 });
@@ -329,12 +330,34 @@ test('the public Sheet parser recognizes the header-only OIMU template contract'
   const analyzed = analyzeSheetHtml(htmlFixture, tab);
   assert.equal(analyzed.headerRow, 5);
   assert.equal(analyzed.dataStartRow, 6);
-  assert.equal(analyzed.columns.key, 8);
-  assert.equal(analyzed.columns.keyField, 'barcode');
+  assert.equal(analyzed.columns.key, 5);
+  assert.equal(analyzed.columns.keyField, 'productName');
   assert.equal(analyzed.columns.image, 4);
   assert.equal(analyzed.columns.productName, 5);
+  assert.equal(analyzed.columns.option, 7);
+  assert.equal(analyzed.columns.barcode, 8);
+  assert.equal(analyzed.columns.size, 10);
+  assert.deepEqual(analyzed.columns.identityFields, ['productName', 'option', 'size', 'barcode']);
   assert.equal(analyzed.columns.retailPrice, 14);
   assert.equal(analyzed.columns.qty, 15);
   assert.equal(analyzed.status, 'CONFIRMED');
   assert.deepEqual(analyzed.issues, []);
+});
+
+test('quantity detection accepts count headers and never treats price or HS code as quantity', () => {
+  const tab = { sheetIndex: 0, sheetId: 55, title: 'Count', rowCount: 20, columnCount: 8, hidden: false };
+  const fixture = [
+    '<table>',
+    '<tr><th id="55R0">1</th><td>상품명</td><td>가격</td><td>HS code</td><td>단가</td><td>개수</td></tr>',
+    '<tr><th id="55R1">2</th><td>노트</td><td>5000</td><td>4820</td><td>2500</td><td></td></tr>',
+    '</table>',
+  ].join('');
+  const analyzed = analyzeSheetHtml(fixture, tab);
+  assert.equal(analyzed.columns.key, 1);
+  assert.equal(analyzed.columns.qty, 5);
+  assert.equal(analyzed.status, 'CONFIRMED');
+
+  const missing = analyzeSheetHtml(fixture.replace('<td>개수</td>', '<td>금액</td>'), tab);
+  assert.equal(missing.columns.qty, null);
+  assert.equal(missing.status, 'NEEDS_REVIEW');
 });
