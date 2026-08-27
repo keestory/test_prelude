@@ -98,6 +98,7 @@ for (const supplierId of ['SUP-HUGIN', 'SUP-MINDOBITTO', 'SUP-DONGGI', 'SUP-GENE
       { getCell: () => ({ value: { formula: 'A1' } }) },
       { getCell: () => ({ value: '브랜드' }) },
       { getCell: () => ({ value: { error: '#N/A' } }) },
+      { getCell: () => ({ value: '#N/A' }) },
       { getCell: () => ({ value: ' new   balance ' }) },
     ];
     const sheet = {
@@ -147,9 +148,30 @@ test('brand-only reuploads can be confirmed and use the atomic Supabase RPC', ()
   const saveCatalogSource = functionSource(html, 'saveCatalogState');
   assert.ok(
     saveCatalogSource.indexOf('await savePreludeWorkspaceRemote(null,options)') <
-      saveCatalogSource.indexOf('return saveCatalogStateLocal()'),
+      saveCatalogSource.indexOf('await saveCatalogStateLocal()'),
     'brand imports must commit remotely before updating the local mirror',
   );
+});
+
+test('a local mirror failure after the remote commit keeps the committed workspace state', async () => {
+  const calls = [];
+  const attributes = {};
+  const context = {
+    preludeCloudReady: true,
+    savePreludeWorkspaceRemote: async () => calls.push('remote'),
+    saveCatalogStateLocal: async () => {
+      calls.push('local');
+      throw new Error('IndexedDB unavailable');
+    },
+    catalogStateRecord: () => ({ id: 'current' }),
+    root: { setAttribute: (name, value) => { attributes[name] = value; } },
+  };
+  vm.runInNewContext(functionSource(html, 'saveCatalogState'), context);
+
+  const result = await context.saveCatalogState({ brandImport: { importId: 'test' } });
+  assert.deepEqual(calls, ['remote', 'local']);
+  assert.match(result.localMirrorWarning, /DB 저장은 완료/);
+  assert.equal(attributes['data-local-mirror-error'], 'IndexedDB unavailable');
 });
 
 test('brand observations are append-only, user-scoped, and retry-idempotent', () => {
