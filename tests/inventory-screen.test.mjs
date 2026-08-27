@@ -81,10 +81,34 @@ test('재고 행은 판매 상태와 확정 후 미입고 발주량을 렌더링
   assert.ok(start >= 0 && end > start, 'inventory renderer must exist');
   const source = html.slice(start, end);
   assert.match(source, /active\?'판매중':'판매 중지'/);
-  assert.match(source, /Number\(item\.incoming\)\|\|0/);
+  assert.match(source, /pendingBySku=pendingOrderQtyBySku\(\)/);
+  assert.match(source, /pendingOrderQtyForSku\(item\.id,pendingBySku\)/);
+  assert.doesNotMatch(source, /Number\(item\.incoming\)/);
   assert.match(source, /item\.brand/);
   assert.match(source, /item\.category/);
   assert.match(source, /item\.productId/);
+});
+
+test('발주량은 같은 SKU의 완료 후 미입고 발주만 합산한다', () => {
+  const start = html.indexOf('function orderLineQty');
+  const end = html.indexOf('function orderTotal', start);
+  assert.ok(start >= 0 && end > start, 'pending order quantity helpers must exist');
+  const source = html.slice(start, end);
+  const orders = [
+    { status: 'CONFIRMED', stockPosted: false, lines: [{ sku: 'SKU-A', qty: 4, confirmedQty: 4 }] },
+    { status: 'CONFIRMED', lines: [{ sku: 'SKU-A', qty: 6, confirmedQty: null }, { sku: 'SKU-B', qty: 3, confirmedQty: 3 }] },
+    { status: 'ORDERED', lines: [{ sku: 'SKU-A', qty: 20 }] },
+    { status: 'RECEIVED', lines: [{ sku: 'SKU-A', qty: 30, confirmedQty: 30 }] },
+    { status: 'CANCELLED', lines: [{ sku: 'SKU-A', qty: 40, confirmedQty: 40 }] },
+    { status: 'CONFIRMED', stockPosted: true, lines: [{ sku: 'SKU-A', qty: 50, confirmedQty: 50 }] },
+    { status: 'CONFIRMED', lines: [{ sku: 'SKU-A', qty: -2, confirmedQty: -2 }, { sku: 'SKU-A', qty: 'bad', confirmedQty: 'bad' }] },
+  ];
+  const helpers = new Function('orders', `${source}; return { pendingOrderQtyBySku, pendingOrderQtyForSku };`)(orders);
+  const totals = helpers.pendingOrderQtyBySku();
+  assert.equal(totals.get('SKU-A'), 10);
+  assert.equal(totals.get('SKU-B'), 3);
+  assert.equal(helpers.pendingOrderQtyForSku('SKU-A', totals), 10);
+  assert.equal(helpers.pendingOrderQtyForSku('SKU-NONE', totals), 0);
 });
 
 test('발주 하기는 선택 발주처를 이어받아 발주 추가 화면을 연다', () => {

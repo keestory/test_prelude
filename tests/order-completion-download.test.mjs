@@ -121,6 +121,56 @@ test('발주 완료 저장 실패 시 주문과 입고 예정 수량을 원상�
   assert.match(harness.messages.at(-1), /remote failed/);
 });
 
+function revisionHarness({ rejectSave = false } = {}) {
+  const start = html.indexOf('async function saveConfirmedRevision');
+  const end = html.indexOf('async function confirmOrder', start);
+  const source = html.slice(start, end);
+  const order = {
+    id: 'PO-TEST-REVISION', status: 'CONFIRMED', revision: 1,
+    lines: [{ sku: 'SKU-1', orderUnits: 2, confirmedOrderUnits: 2, qty: 4, confirmedQty: 4 }],
+  };
+  const item = { id: 'SKU-1', incoming: 4 };
+  const draftLines = [{ sku: 'SKU-1', orderUnits: 4, qty: 8 }];
+  const closed = [];
+  const messages = [];
+  let localRollbacks = 0;
+  const saveConfirmedRevision = new Function(
+    'editingOrderId', 'findOrder', 'validateDraft', 'draftLines', 'findItem',
+    'saveCatalogState', 'saveCatalogStateLocal', 'closeOverlay', 'rerenderAll', 'showToast',
+    `${source}; return saveConfirmedRevision;`,
+  )(
+    order.id,
+    (id) => id === order.id ? order : null,
+    () => true,
+    draftLines,
+    (sku) => sku === item.id ? item : null,
+    async () => { if (rejectSave) throw new Error('revision remote failed'); },
+    async () => { localRollbacks += 1; },
+    (id) => closed.push(id),
+    () => {},
+    (message) => messages.push(message),
+  );
+  return { saveConfirmedRevision, order, item, closed, messages, getLocalRollbacks: () => localRollbacks };
+}
+
+test('확정 발주 수량 수정은 새 수량을 반영하고 저장 실패 시 기존 수량으로 복구한다', async () => {
+  const success = revisionHarness();
+  await success.saveConfirmedRevision();
+  assert.equal(success.order.revision, 2);
+  assert.equal(success.order.lines[0].confirmedQty, 8);
+  assert.equal(success.item.incoming, 8);
+  assert.deepEqual(success.closed, ['mb-order-overlay']);
+
+  const failure = revisionHarness({ rejectSave: true });
+  await failure.saveConfirmedRevision();
+  assert.equal(failure.order.revision, 1);
+  assert.equal(failure.order.lines[0].confirmedQty, 4);
+  assert.equal(failure.item.incoming, 4);
+  assert.deepEqual(failure.closed, []);
+  assert.equal(failure.getLocalRollbacks(), 1);
+  assert.match(failure.messages.at(-1), /revision remote failed/);
+});
+
 test('완료 후 재다운로드에 필요한 상품과 브랜드 값은 주문 스냅샷을 우선한다', () => {
   const snapshotStart = html.indexOf('function buildOrderLineSnapshot');
   const snapshotEnd = html.indexOf('function outputTargetsFromOrderLines', snapshotStart);
